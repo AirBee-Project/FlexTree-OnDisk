@@ -5,7 +5,9 @@ edition = "2024"
 
 [dependencies]
 compio = { version = "0.19.2", features = ["macros", "fs"] }
-kasane-logic = { git = "https://github.com/AirBee-Project/Kasane-Logic.git" }
+kasane-logic = { path = "../Kasane-Logic" }
+crc32c = "0.6"
+bytemuck = { version = "1", features = ["derive", "min_const_generics", "extern_crate_alloc"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
