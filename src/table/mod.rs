@@ -47,12 +47,13 @@ impl Table {
         let mut options = OpenOptions::new();
         options.read(true).write(true).create(true);
         let file = open_direct(path, &options).await?;
+
         let len = file.metadata().await?.len().div_ceil(Page::SIZE as u64);
 
         let mut headers = Vec::new();
-        for index in 0..HEADER_PAGES {
-            if let Some(page) = Page::read_at(&file, index).await?
-                && let Ok(header) = page.get::<RawHeader>()
+        for page_index in 0..HEADER_PAGES {
+            if let Some(page) = Page::read_at_page(&file, page_index).await?
+                && let Ok(header) = page.try_head_as::<RawHeader>()
             {
                 headers.push(*header);
             }
@@ -135,7 +136,7 @@ impl Table {
     /// ページとヘッダーの永続化の順序は問わない。どちらかが欠けたまま落ちても、開くときの検証で前の世代へ戻る。
     async fn write_header(&mut self, header: RawHeader) -> Result<(), Error> {
         Page::of(&header)
-            .write_at(&mut self.file, header.generation % HEADER_PAGES)
+            .write_at_page(&mut self.file, header.generation % HEADER_PAGES)
             .await?;
         self.file.sync_data().await?;
         Ok(())
@@ -224,21 +225,23 @@ impl Table {
 
     /// 先頭を根とするレコードの列を新しいページに書き、そのページを指す RawNode を返す。
     async fn write_page(&mut self, records: Vec<RawRecord>) -> Result<RawNode, Error> {
-        let index = self.page_count;
-        let node = records[0].stored_at(index, 0)?.into();
+        let page_index = self.page_count;
+        let node = records[0].stored_at(page_index, 0)?.into();
         let mut page = RawPage::zeroed();
         page.records[..records.len()].copy_from_slice(&records);
-        Page::of(&page).write_at(&mut self.file, index).await?;
+        Page::of(&page)
+            .write_at_page(&mut self.file, page_index)
+            .await?;
         self.page_count += 1;
         Ok(node)
     }
 
     /// `stored` のページを読み、そこから下でそのページにある部分木をメモリ上に展開する。ページの外の子は [`Node::Stored`] のまま。
     async fn read(&self, stored: Stored) -> Result<Node, Error> {
-        Page::read_at(&self.file, stored.page)
+        Page::read_at_page(&self.file, stored.page)
             .await?
             .ok_or(Error::Corrupt)?
-            .get::<RawPage>()?
+            .try_head_as::<RawPage>()?
             .decode(stored.page, usize::from(stored.slot))
     }
 
@@ -411,9 +414,9 @@ impl Table {
 
 /// `pages` のページがすべて書き終わっていて、チェックサムが合うなら true。
 async fn intact(file: &File, pages: Range<u64>) -> Result<bool, Error> {
-    for index in pages {
-        match Page::read_at(file, index).await? {
-            Some(page) if page.get::<RawPage>().is_ok() => {}
+    for page_index in pages {
+        match Page::read_at_page(file, page_index).await? {
+            Some(page) if page.try_head_as::<RawPage>().is_ok() => {}
             _ => return Ok(false),
         }
     }

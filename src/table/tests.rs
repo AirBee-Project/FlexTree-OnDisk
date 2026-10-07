@@ -18,10 +18,10 @@ impl TempFile {
 }
 
 impl TempFile {
-    /// `index` 番目のページを `f` で書き換える。落ちて書き込みが欠けた状態を作るのに使う。
-    fn modify_page(&self, index: u64, f: impl FnOnce(&mut [u8])) {
+    /// `page_index` 番目のページを `f` で書き換える。落ちて書き込みが欠けた状態を作るのに使う。
+    fn modify_page(&self, page_index: u64, f: impl FnOnce(&mut [u8])) {
         let mut bytes = std::fs::read(&self.0).unwrap();
-        f(&mut bytes[index as usize * Page::SIZE..][..Page::SIZE]);
+        f(&mut bytes[page_index as usize * Page::SIZE..][..Page::SIZE]);
         std::fs::write(&self.0, bytes).unwrap();
     }
 }
@@ -279,8 +279,8 @@ async fn never_overwrites_pages_of_unfinished_generation() {
 async fn rejects_when_no_header_is_valid() {
     let file = TempFile::new("no-header");
     two_generations(&file).await;
-    for index in 0..HEADER_PAGES {
-        file.modify_page(index, |page| page[0] ^= 1);
+    for page_index in 0..HEADER_PAGES {
+        file.modify_page(page_index, |page| page[0] ^= 1);
     }
     assert!(matches!(Table::open(&file.0).await, Err(Error::Corrupt)));
 }

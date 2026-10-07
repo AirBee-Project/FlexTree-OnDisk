@@ -59,18 +59,20 @@ impl Page {
     }
 
     /// 先頭を `T` として読む。チェックサムが合わない、または `T` として正しくないならエラーを返す。
-    pub fn get<T: CheckedBitPattern>(&self) -> Result<&T, Error> {
+    pub fn try_head_as<T: CheckedBitPattern>(&self) -> Result<&T, Error> {
+        // 1Pageに収まることをコンパイル時に検証
         const { assert!(size_of::<T>() <= Page::CAPACITY) };
+
         if self[Self::CAPACITY..] != self.checksum().to_le_bytes() {
             return Err(Error::Corrupt);
         }
         Ok(bytemuck::checked::try_from_bytes(&self[..size_of::<T>()])?)
     }
 
-    /// `file` の `index` 番目のページを読む。ファイルがそこまで無ければ [`None`]。
-    pub async fn read_at(file: &File, index: u64) -> io::Result<Option<Box<Self>>> {
+    /// `file` の `page_index` 番目のページを読む。ファイルがそこまで無ければ [`None`]。
+    pub async fn read_at_page(file: &File, page_index: u64) -> io::Result<Option<Box<Self>>> {
         let (result, page) = file
-            .read_exact_at(Self::new(), index * Self::SIZE as u64)
+            .read_exact_at(Self::new(), page_index * Self::SIZE as u64)
             .await
             .into();
         match result {
@@ -80,9 +82,15 @@ impl Page {
         }
     }
 
-    /// `file` の `index` 番目のページに書く。
-    pub async fn write_at(self: Box<Self>, file: &mut File, index: u64) -> io::Result<()> {
-        file.write_all_at(self, index * Self::SIZE as u64).await.0
+    /// `file` の `page_index` 番目のページに書く。
+    pub async fn write_at_page(
+        self: Box<Self>,
+        file: &mut File,
+        page_index: u64,
+    ) -> io::Result<()> {
+        file.write_all_at(self, page_index * Self::SIZE as u64)
+            .await
+            .0
     }
 
     fn checksum(&self) -> u32 {
