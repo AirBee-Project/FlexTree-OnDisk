@@ -1,5 +1,5 @@
 use FlexTree_OnDisk::table::Table;
-use kasane_logic::SingleId;
+use spatial_id::SingleId;
 
 #[compio::main]
 async fn main() {

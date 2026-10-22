@@ -4,7 +4,7 @@ use std::io;
 #[derive(Debug)]
 pub enum Error {
     Io(io::Error),
-    SpatialId(kasane_logic::Error),
+    SpatialId(spatial_id::Error),
     /// ファイルの中身が想定した形式になっていない。
     Corrupt,
 }
@@ -41,8 +41,8 @@ impl From<bytemuck::checked::CheckedCastError> for Error {
     }
 }
 
-impl From<kasane_logic::Error> for Error {
-    fn from(err: kasane_logic::Error) -> Self {
+impl From<spatial_id::Error> for Error {
+    fn from(err: spatial_id::Error) -> Self {
         Self::SpatialId(err)
     }
 }
